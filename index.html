@@ -1,19 +1,50 @@
 <html>
 <head>
   <link rel="stylesheet" href="http://libs.cartocdn.com/cartodb.js/v3/3.11/themes/css/cartodb.css" />
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <script src="./js/nv.d3.js"></script>
   <script src="http://libs.cartocdn.com/cartodb.js/v3/3.11/cartodb.js"></script>
+  <link href='http://fonts.googleapis.com/css?family=Lato:300,400,700' rel='stylesheet' type='text/css'>
   <style>
     html, body {width:100%; height:100%; padding: 0; margin: 0;}
+    body {
+      padding-top:60px;
+      box-sizing:border-box;
+      font-family: 'Lato', sans-serif;
+    }
+
+    #header {
+      position: absolute;
+      top: 0;
+      height: 60px;
+      width: 100%;
+      background-color: #2B3554;
+      padding: 0 20px;
+      color: #fff;
+      padding-top: 9px;
+      border-bottom: 1px solid #475A8B;
+      box-sizing: border-box;
+    }
+
+    #header h1 {
+      margin:0;
+    }
+
     #map { width: 100%; height:100%; background: black;}
-    #menu { position: absolute; top: 5px; right: 10px; width: 400px; height:60px; background: transparent; z-index:10;}
-    #menu a { 
-      margin: 15px 10px 0 0;
+    #menu {
+      right: 10px;
+      width: 400px;
+      background: transparent;
+      z-index: 10;
+      float: right;
+    }
+    .button { 
+      margin: 0 0 0 12px;
       float: right;
       vertical-align: baseline;
       width: 70px;
       padding: 10px;
       text-align: center;
-      font: bold 11px "Helvetica",Arial;
       line-height: normal;
       color: #555;
       border-radius: 4px;
@@ -22,71 +53,291 @@
       text-decoration: none;
       cursor: pointer;
     }
-    #menu a.selected,
-    #menu a:hover { 
-      color: #F84F40;
+    .button.selected,
+    .button:hover { 
+      color: #FFFFFF;
+      background: #444;
     }
+
+    .sidebar {
+      padding: 16px;
+      position: absolute;
+      right: 20px;
+      top: 80px;
+      z-index: 100;
+      background: #ffffff;
+      border-radius: 4px;
+      color: #666;
+      width: 254px;
+      /*min-height: 400px;*/
+      box-sizing: border-box;
+      
+    }
+
+    .sidebar h4 {
+      margin: 0 0 10px 0;
+      min-height: 40px;
+    }
+
+    #title {
+      display:inline-block;
+    }
+
+    .headerLabel {
+      position: absolute;
+      top: 18px;
+      right: 228px;
+      font-size: 18px;
+    }
+
+    .mean {
+      display: inline-block;
+      font-size: 33px;
+      width:50%;
+      text-align: right;
+    }
+
+    .meanLabel {
+      display:inline-block;
+      position: relative;
+      top: -6px;
+      width:40%;
+    }
+
+    text {
+      font-weight: 100;
+    font-size: 14px;
+    }
+
+
+
   </style>
 
   <script>
   var map;
+  var baseAPI = 'https://cwhong.cartodb.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM nycelementaryschoolscoresandzones WHERE cartodb_id = '
+
+  var layerGroup = new L.LayerGroup();
+
+  var chartData = [];
+  chartData[0]={};
+
+  var chart;
+
   function init(){
     // initiate leaflet map
     map = new L.Map('map', { 
       center: [40.7,-73.92],
       zoom: 11
     })
-
     L.tileLayer('https://dnv9my2eseobd.cloudfront.net/v3/cartodb.map-4xtxp73f/{z}/{x}/{y}.png', {
       attribution: 'Mapbox <a href="http://mapbox.com/about/maps" target="_blank">Terms &amp; Feedback</a>'
     }).addTo(map);
     var layerUrl = 'http://cwhong.cartodb.com/api/v2/viz/79590982-d725-11e4-9ae9-0e9d821ea90d/viz.json';
-
     var sublayers = [];
 
-    var currentHover = null;
-
+    var currentHover, newFeature = null;
     cartodb.createLayer(map, layerUrl)
       .addTo(map)
       .on('done', function(layer) {
         console.log(layer);
+        //layer.getSubLayer(0).hide();
+        layer.getSubLayer(1).hide();
+        //layer.getSubLayer(2).hide();
+
         layer.on('featureOver', function(ev, pos, latlng, data) {
+          
+          //check to see if it's the same feature so we don't waste an API call
           if(data.cartodb_id != currentHover) {
-
-            var baseAPI = 'https://cwhong.cartodb.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM nycelementaryschoolscoresandzones WHERE cartodb_id = '
-
+            layerGroup.clearLayers();
+          
             $.getJSON(baseAPI + data.cartodb_id, function(res) {
               console.log(res);
-              var newFeature = L.geoJson(res).addTo(map);
-            })
+              newFeature = L.geoJson(res,{
+                style: {
+                  "color": "#DCFF2E",
+                  "weight": 5,
+                  "opacity": 1
+                }
+              });
+              layerGroup.addLayer(newFeature);
+              layerGroup.addTo(map);
+              updateSidebar(res.features[0].properties);
+              updateChart(res.features[0].properties)
 
+            })
             currentHover = data.cartodb_id;
           }
-        });
+        })
+        .on('featureOut', function(){
+          layerGroup.clearLayers();
+        })
+
         // // change the query for the first layer
         // var subLayerOptions = {
         //   sql: "SELECT * FROM ne_10m_populated_places_simple",
         //   cartocss: "#ne_10m_populated_places_simple{marker-fill: #F84F40; marker-width: 8; marker-line-color: white; marker-line-width: 2; marker-clip: false; marker-allow-overlap: true;}"
         // }
-
         // var sublayer = layer.getSubLayer(0);
-
         // sublayer.set(subLayerOptions);
-
         // sublayers.push(sublayer);
-      }).on('error', function() {
+
+        $('#mathButton').click(function(){
+          layer.getSubLayer(0).show();
+          layer.getSubLayer(1).hide();
+          $('.button').removeClass('selected');
+          $(this).addClass('selected');
+        });
+
+        $('#elaButton').click(function(){
+          layer.getSubLayer(0).hide();
+          layer.getSubLayer(1).show();
+          $('.button').removeClass('selected');
+          $(this).addClass('selected');
+        });
+
+
+      })
+      .on('error', function() {
         //log the error
       });
       }
+
+      //from http://stackoverflow.com/questions/196972/convert-string-to-title-case-with-javascript
+      // String.prototype.toProperCase = function () {
+      //   return this.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+      // };
+
+      function updateSidebar(f) {
+
+
+        $('.schoolName').text(function(){
+          return f._school_na == null ? "N/A" : f._school_na;
+        });
+        $('.mathMean').text(roundToTenth(f._mathmean));
+        $('.elaMean').text(roundToTenth(f._elamean));
+      }
+
+      function roundToTenth(num) {
+        return Math.round( num * 10) / 10
+      }
+
+      function updateChart(f){
+        console.log(f);
+        chartData[0].key = "test";
+        chartData[0].values = 
+          [
+            { 
+              "label" : "1" ,
+              "value" : f._math1
+            } , 
+            { 
+              "label" : "2" , 
+              "value" : f._math2
+            } , 
+            { 
+              "label" : "3" , 
+              "value" : f._math3
+            } , 
+            { 
+              "label" : "4" , 
+              "value" : f._math4
+            } 
+          ]
+        console.log(chartData);
+
+       d3.select('#chart svg')
+      .datum(chartData)
+      .transition().duration(500)
+      .call(chart);
+
+      }
+
+//chart stuff
+nv.addGraph(function() {
+  chart = nv.models.discreteBarChart()
+      .x(function(d) { return d.label })    //Specify the data accessors.
+      .y(function(d) { return d.value })
+      //.staggerLabels(true)    //Too many bars and not enough room? Try staggering labels.
+      .tooltips(false)        //Don't show tooltips
+      .showValues(true)       //...instead, show the bar value right on top of each bar.
+      //.valueFormat(d3.format('d'))
+      .width(222)
+      .showYAxis(false)
+      .margin({left:0,right:0})
+      .color(['rgb(215,25,28)','rgb(253,174,97)','rgb(166,217,106)','rgb(26,150,65)']);
+      ;
+
+      console.log(exampleData());
+
+  // d3.select('#chart svg')
+  //     .datum(exampleData)
+  //     .transition().duration(500)
+  //     .call(chart);
+
+  nv.utils.windowResize(chart.update);
+
+  return chart;
+});
+
+//Each bar represents a single discrete quantity.
+function exampleData() {
+ return  [ 
+    {
+      key: "Cumulative Return",
+      values: [
+        { 
+          "label" : "1" ,
+          "value" : 123
+        } , 
+        { 
+          "label" : "2" , 
+          "value" : 24
+        } , 
+        { 
+          "label" : "3" , 
+          "value" : 45
+        } , 
+        { 
+          "label" : "4" , 
+          "value" : 34
+        } 
+      ]
+    }
+  ]
+
+}
+
   </script>
 </head>
 
 <body onload="init()">
+  <div id='header'>
+    <div id='title'>
+      <h1>NYC Elementary School Zones w/ 2014 State Test Scores</h1>
+    </div>
+    <div id='menu'>
+      <div class = "headerLabel">Toggle Map Colors:</div>
+      <div id="elaButton" class="button">ELA</div>
+      <div id="mathButton" class="button selected">Math</div> 
+       
+    </div>
+  </div>
   <div id='map'></div>
-  <div id='menu'>
-    <a href="#megacities" id="megacities" class="button megacities">MEGACITIES</a> 
-    <a href="#capitals" id="capitals" class="button capitals">CAPITALS</a> 
-    <a href="#all" id="all" class="button all">ALL CITIES</a>
+  
+  <div class='sidebar'>
+    <h4 class='schoolName'>SideBar</h4>
+    <div class='meanItem'>
+      <div class='meanLabel'>Math Mean:</div>
+      <div class = "mathMean mean"></div>
+    </div>
+      <div class='meanItem'>
+      <div class='meanLabel'>ELA Mean:</div>  
+      <div class = "elaMean mean"></div>
+    </div>
+    <div id="chart">
+  <svg></svg>
+</div>
   </div>
 </body>
 </html>
